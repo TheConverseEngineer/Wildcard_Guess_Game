@@ -36,6 +36,7 @@ title = canvas.create_text(400, 50, font=('Helvetica', 35), fill='#2F1513',  tex
 
 #Accessable entities
 e = None
+
 """************************GUI Functions*************************"""
 def round_rect(x1, y1, x2, y2, radius=25, **kwargs): #puts all corner points twice, starting at bottom of top left curve
     points = [x1, y1 + radius, #top left corner
@@ -77,6 +78,7 @@ class Screens():
     def CloseAllScreens(self):
         self.Visuals.StartScreen.Close(self.Visuals.StartScreen)
         self.Visuals.GameMode.ExitGameMode()
+        self.Visuals.LevelMenu.CloseLevelMenu()
     
     class Visuals(): #visuals
 
@@ -105,46 +107,74 @@ class Screens():
 
         class LevelMenu():
             
-            def CreateLevelButton(self, x, y, num, Locked):
-                round_rect(x, y, x+50, y+50, fill='#55666F')
-                canvas.create_text(x+25, y+25, text = num, font=('Helvetica', 15))
+            def CreateLevelButton(self, x, y, num, Locked, **kwargs):
+                round_rect(x, y, x+50, y+50, fill='#55666F', **kwargs)
+                canvas.create_text(x+25, y+25, text = num, font=('Helvetica', 15), **kwargs)
                 if Locked == True:
-                    canvas.create_text(x+25, y+65, text = 'Locked', font=('Helvetica', 15))
-                else: canvas.create_text(x+25, y+65, text = 'Unlocked', font=('Helvetica', 15))
+                    canvas.create_text(x+25, y+65, text = 'Locked', font=('Helvetica', 15), **kwargs)
+                else: canvas.create_text(x+25, y+65, text = 'Unlocked', font=('Helvetica', 15), **kwargs)
 
                     
 
             def __init__(self):
                 itemno = 0
-                for i in range(3): #each row
+                for i in range(2): #each row
                     for j in range(4): #each column
                         itemno += 1
-                        if (itemno > MaxLevelUnlock): self.CreateLevelButton((100 * j) + 220,(125 * i) + 150, itemno, True)
-                        else: self.CreateLevelButton((100 * j) + 220,(125 * i) + 150, itemno, False)
+                        if (itemno > MaxLevelUnlock): self.CreateLevelButton((100 * j) + 220,(125 * i) + 150, itemno, True, tag='LM')
+                        else:
+                            self.CreateLevelButton((100 * j) + 220,(125 * i) + 150, itemno, False, tags=('btn' + str(itemno), 'LM'))
+                            canvas.tag_bind('btn' + str(itemno),"<Button-1>",Screens.Dynamics.LevelMenu.OpenLevel)
+                #the last two
+                if (9 > MaxLevelUnlock):
+                    self.CreateLevelButton(220, 400, 9, True, tag='LM')
+                else:
+                    self.CreateLevelButton(220, 400, 9, False, tags=('btn9', 'LM'))
+                    canvas.tag_bind('btn9' ,"<Button-1>",Screens.Dynamics.LevelMenu.OpenLevel)
+
+                if (10 > MaxLevelUnlock):
+                    self.CreateLevelButton(320, 400, 10, True, tag='LM')
+                else:
+                    self.CreateLevelButton(320, 400, 10, False, tags=('btn10', 'LM'))
+                    canvas.tag_bind('btn10' ,"<Button-1>",Screens.Dynamics.LevelMenu.OpenLevel)      
+
+            def CloseLevelMenu():
+                for i in range(1, 17):
+                    canvas.tag_unbind('btn'+str(i), "<Button-1>")
+                canvas.delete('LM')
                 
                 
 
         class GameMode():
             LevelNumLabel = None
             TimeRemainingLabel = None
+            hint = None
             def __init__(self):
                 #globals
                 global level
                 global task
                 global maxTask
-                global time, e
+                global time, e, f
                     
                 #the labels
                 self.LevelNumLabel = canvas.create_text(175, 115, text="Level %d, Task %d of %d" % (level, task, maxTask), font=('Helvetica', 20), fill='#2F1513', tags=('levnum', 'GameMode'))
                 self.TimeRemainingLabel = canvas.create_text(625, 115, text="%d seconds remaining" % (time), font=('Helvetica', 20), fill='#2F1513', tags=('timeleft','GameMode'))
-
+                self.hint = canvas.create_text(400, 470, text='Press me for a hint', font=('Helvetica', 16), fill='#2F1513', tags=('hint','GameMode'))
+                
                 #make entrybox
                 e = tk.Entry(master, font="Helvetica 20 bold")
                 canvas.create_window(400, 500, window=e, tag='GameMode')
 
                 #make image
-                Screens.Visuals.GameMode.CreateImage(level, 1)
+                Screens.Visuals.GameMode.CreateImage(level, task)
+                
+                #bind hint
+                canvas.tag_bind('hint',"<Button-1>", self.Hint)
 
+            def Hint(self, event):
+                global level, task
+                canvas.itemconfig('hint', text=LevelInfo.GetHint(level, task))
+   
             def UpdateGUILabels(self):
                 global level, task, maxTask, time
                 canvas.itemconfig('levnum', text="Level %d, Task %d of %d" % (level, task, maxTask)) #update level num and task num
@@ -152,8 +182,12 @@ class Screens():
 
             def CreateImage(lev, task):
                 global CreatedImage
-                CreatedImage = ImageTk.PhotoImage(Image.open(LevelInfo.GetPic(lev, task)))
-                canvas.create_image(300, 300, image=CreatedImage, tag='GameMode')
+                print(lev, task)
+                CreatedImage = Image.open(LevelInfo.GetPic(lev, task))
+                w, h = CreatedImage.size
+                CreatedImage = CreatedImage.resize((int(round((250 * int(w)) / int(h))), 250), Image.ANTIALIAS)
+                CreatedImage = ImageTk.PhotoImage(CreatedImage)
+                canvas.create_image(400, 300, image=CreatedImage, tags=('GameMode', 'QImg'))
 
             def CreateJustText(b):
                 if b == True:
@@ -177,18 +211,23 @@ class Screens():
         class StartScreen:
 
             def SettingsBtn(self):
-                print('hi')
                 Screens.Visuals.StartScreen.Close(self)
                 Screens.Visuals.LevelMenu()
 
             def PlayBtn(self):
-                print("Let's Play!")
-
+                Screens.CloseAllScreens(Screens)
+                Screens.Visuals.LevelMenu()
+                
         class StartGameMode():
 
             def __init__(self):
                 #globals
-                global level, task, maxTask, EGMode
+                global level, task, maxTask, EGMode, MaxLevelUnlock
+                #set task to 1
+                task = 1
+                
+                #trun off EGmode
+                EGMode = False
                 
                 #get level info
                 maxTask = LevelInfo.GetMaxTask(level)
@@ -196,23 +235,32 @@ class Screens():
                 #Create screen
                 Screens.Visuals.GameMode()
 
-                #set task to 1
-                task = 1
                 for i in range(1, maxTask + 1):
-                    print('a task')
                     self.InitTask(level, i)
                     if EGMode == True:
                         EGMode = False
                         return
 
+
+
                 #close game mode
                 Screens.CloseAllScreens(Screens)
+
+                #see if new level was unlocked
+                if level == MaxLevelUnlock:
+                    MaxLevelUnlock += 1
+
+                #open level menu
+                Screens.Visuals.LevelMenu()
                     
             def InitTask(self, level, task):
                 #globals
                 global maxTime, TAns
                 maxTime, TAns = LevelInfo.UnpackTask(task, level)
+                canvas.delete('QImg')
+                Screens.Visuals.GameMode.CreateImage(level, task)
                 self.TaskGameLoop()
+                canvas.itemconfig('hint', text="Press me for a hint")
                 
             def TaskGameLoop(self):
                 global maxTime, time, TAns, e, task
@@ -230,6 +278,7 @@ class Screens():
                         cor = True
                         e.delete(0, len(e.get()))
                         task += 1
+                        return
                         
                     if time == 0: #if out of time
                         Screens.Visuals.GameMode.CreateJustText(False)
@@ -237,6 +286,9 @@ class Screens():
                         task += 1
                         #close game mode
                         Screens.CloseAllScreens(Screens)
+
+                        #open level menu
+                        Screens.Visuals.LevelMenu()
                         
                     #update screen
                     Screens.Visuals.GameMode.UpdateGUILabels(Screens.Visuals.GameMode)
@@ -245,7 +297,15 @@ class Screens():
                     master.update()
                     master.update_idletasks()
 
+        class LevelMenu():
+
+            def OpenLevel(self):
+                global level
+                level = int(canvas.gettags(canvas.find_withtag("current"))[0][3])
+                Screens.CloseAllScreens(Screens)
+                Screens.Dynamics.StartGameMode()
+
 
                     
-Screens.Visuals.LevelMenu()                    
+Screens.Visuals.StartScreen()
 master.mainloop()
